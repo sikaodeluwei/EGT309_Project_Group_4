@@ -1,0 +1,13 @@
+import sqlite3
+import pandas as pd
+
+# Connect to database
+conn = sqlite3.connect("gas_monitoring.db")
+
+# Read sample data
+df = pd.read_sql_query("SELECT * FROM gas_monitoring LIMIT 10;", conn)
+
+# Show results
+print(df.head())
+print(df.columns)
+print(df.dtypes)

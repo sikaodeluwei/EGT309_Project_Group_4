@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  pipeline-dev:
+    build: .
+    container_name: ml_pipeline_container
+    volumes:
+      - .:/app
+    ports:
+      - "8888:8888"
+    tty: true
+    stdin_open: true

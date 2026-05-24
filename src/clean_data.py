@@ -26,6 +26,9 @@ def load_and_orient_data(conn) -> pd.DataFrame:
     print("[Block 2] Fetching raw data and positioning Session ID first...")
     df = pd.read_sql_query("SELECT * FROM raw_gas_data", conn)
     
+    # CRITICAL FIX: Standardize column strings right out of the database
+    df.columns = df.columns.str.strip().str.lower()
+    
     # Rationale: Place 'session_id' first as a 'key' column for identification
     if 'session_id' in df.columns:
         cols = ['session_id'] + [col for col in df.columns if col != 'session_id']
@@ -85,47 +88,51 @@ def execute_advanced_imputation(df: pd.DataFrame) -> pd.DataFrame:
     pre-cleaning exploratory data analysis observations.
     """
     print("[Block 5] Commencing advanced multi-variable imputation steps...")
+    
+    # FORCE LOWERCASE AGAIN: Absolute safety net for column headers
+    df.columns = df.columns.str.strip().str.lower()
+    print(f"    -> Current available columns: {list(df.columns)}")
 
     # -------------------------------------------------------------
     # A. Impute Ambient Light Level using Time of Day
     # -------------------------------------------------------------
     if 'ambient_light_level' in df.columns and 'time_of_day' in df.columns:
-        # Map logical defaults based on the time category
         light_mapping = {'morning': 'dim', 'afternoon': 'very_bright', 'night': 'dark'}
         df['ambient_light_level'] = df['ambient_light_level'].fillna(df['time_of_day'].map(light_mapping))
-        # Catch any remaining leftovers with a generic placeholder flag
         df['ambient_light_level'] = df['ambient_light_level'].fillna('unknown')
 
     # -------------------------------------------------------------
     # B. Impute Humidity derived from Time of Day & Temperature Group Medians
     # -------------------------------------------------------------
     if 'humidity' in df.columns:
-        # Rationale note: If anomalies exist, median is statistically safer than mean
-        # Clean out impossible negative numbers first
         df['humidity'] = np.where(df['humidity'] < 0, np.nan, df['humidity'])
         
-        # Calculate group medians based on surrounding ambient metrics
-        grouped_humidity = df.groupby(['time_of_day'])['humidity'].transform('median')
-        df['humidity'] = df['humidity'].fillna(grouped_humidity)
+        # Safe Check: Ensure time_of_day exists before grouping, otherwise fallback to global median
+        if 'time_of_day' in df.columns:
+            grouped_humidity = df.groupby(['time_of_day'])['humidity'].transform('median')
+            df['humidity'] = df['humidity'].fillna(grouped_humidity)
+        else:
+            print("    [Warning] 'time_of_day' column missing for group-by! Falling back to global median.")
+            df['humidity'] = df['humidity'].fillna(df['humidity'].median())
 
     # -------------------------------------------------------------
     # C. Impute MetalOxideSensor_Unit2 via cross-unit sister medians
     # -------------------------------------------------------------
     unit_cols = ['metaloxidesensor_unit1', 'metaloxidesensor_unit3', 'metaloxidesensor_unit4']
     if 'metaloxidesensor_unit2' in df.columns and all(col in df.columns for col in unit_cols):
-        # Rationale: Impute missing Unit 2 data by using the row-wise median of sibling units 1, 3, and 4
         sibling_median = df[unit_cols].median(axis=1)
         df['metaloxidesensor_unit2'] = df['metaloxidesensor_unit2'].fillna(sibling_median)
 
     # -------------------------------------------------------------
-    # D. Impute Carbon Monoxide (CO) via CO2 and Metal Oxide sensor behaviors
+    # D. Impute Carbon Monoxide (CO) via CO2 behaviors
     # -------------------------------------------------------------
-    co_dependencies = ['metaloxidesensor_unit1', 'co2_infraredsensor', 'co2_electrochemicalsensor']
-    if 'co_gassensor' in df.columns and all(col in df.columns for col in co_dependencies):
-        # Calculate a highly contextual grouping median to reflect the compound chemical relationships
+    if 'co_gassensor' in df.columns:
         df['co_gassensor'] = np.where(df['co_gassensor'] < 0, np.nan, df['co_gassensor'])
-        contextual_co_median = df.groupby(['time_of_day'])['co_gassensor'].transform('median')
-        df['co_gassensor'] = df['co_gassensor'].fillna(contextual_co_median)
+        if 'time_of_day' in df.columns:
+            contextual_co_median = df.groupby(['time_of_day'])['co_gassensor'].transform('median')
+            df['co_gassensor'] = df['co_gassensor'].fillna(contextual_co_median)
+        else:
+            df['co_gassensor'] = df['co_gassensor'].fillna(df['co_gassensor'].median())
 
     return df
 # endregion

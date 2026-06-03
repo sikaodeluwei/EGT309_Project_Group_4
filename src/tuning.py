@@ -47,7 +47,7 @@ class ModelTuner:
             )
             
             grid_search.fit(X_train, y_train)
-            best_model = grid_search.best_estimator__
+            best_model = grid_search.best_estimator_
             
             preds = best_model.predict(X_test)
             score = f1_score(y_test, preds, average='weighted')

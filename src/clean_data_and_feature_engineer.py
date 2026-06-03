@@ -4,38 +4,11 @@ import numpy as np
 import sqlite3
 from sklearn.metrics.pairwise import cosine_similarity
 
-# ==========================================
-# BLOCK 1: INITIALIZATION & DB CONNECT
-# ==========================================
-# region BLOCK 1: INITIALIZATION
-def get_db_connection(db_path="data/gas_monitoring.db"):
-    """Establishes connection to the SQLite database environment."""
-    return sqlite3.connect(db_path)
-# endregion
+# connect to database
+conn = sqlite3.connect("gas_monitoring.db")
 
-
-# ==========================================
-# BLOCK 2: LOADING & RE-ORDERING KEYS
-# ==========================================
-# region BLOCK 2: LOADING & RE-ORDERING KEYS
-def load_and_orient_data(conn) -> pd.DataFrame:
-    """
-    Fetches raw data using SQLite. Automatically repositions 'session_id' 
-    to the first position as a primary identification key column.
-    """
-    print("[Block 2] Fetching raw data and positioning Session ID first...")
-    df = pd.read_sql_query("SELECT * FROM raw_gas_data", conn)
-    
-    # CRITICAL FIX: Standardize column strings right out of the database
-    df.columns = df.columns.str.strip().str.lower()
-    
-    # Rationale: Place 'session_id' first as a 'key' column for identification
-    if 'session_id' in df.columns:
-        cols = ['session_id'] + [col for col in df.columns if col != 'session_id']
-        df = df[cols]
-    return df
-# endregion
-
+# read sample data (uses SQL language to pull data from the database)
+df = pd.read_sql_query("SELECT * FROM gas_monitoring;", conn)
 
 # ==========================================
 # BLOCK 3: CATEGORICAL & TIME STANDARD

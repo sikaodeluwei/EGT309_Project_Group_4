@@ -4,11 +4,32 @@ import numpy as np
 import sqlite3
 from sklearn.metrics.pairwise import cosine_similarity
 
+# class DataLoader: # left for future modularization
 # connect to database
 conn = sqlite3.connect("gas_monitoring.db")
 
 # read sample data (uses SQL language to pull data from the database)
 df = pd.read_sql_query("SELECT * FROM gas_monitoring;", conn)
+
+# class DataUniformer: # left for future modularization
+# ensure categorical columns dtype is str for uniform processing (that uses str dtype)
+df = df.astype({'Time of Day': str, 'HVAC Operation Mode': str,
+            'Ambient Light Level': str, 'Activity Level': str})
+
+
+# make colums lowercase and replace spaces with underscores
+df.columns = df.columns.str.strip().str.lower() # lowercase
+df.columns = df.columns.astype(str).str.strip().str.lower().str.replace(' ', '_') # strip spaces to underscores
+
+# make all cell data lowercase and replace spaces with underscores
+df = df.map(lambda x: x.lower() if isinstance(x, str) else x) # lowercase
+df = df.map(lambda x: x.lower().replace(' ', '_') if isinstance(x, str) else x) # strip spaces to underscores
+
+# add spacing to values for data consistency
+df['activity_level'] = df['activity_level'].replace('lowactivity',
+                                                    'low_activity')
+df['activity_level'] = df['activity_level'].replace('moderateactivity',
+                                                'moderate_activity')
 
 # ==========================================
 # BLOCK 3: CATEGORICAL & TIME STANDARD

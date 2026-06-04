@@ -31,31 +31,8 @@ df['activity_level'] = df['activity_level'].replace('lowactivity',
 df['activity_level'] = df['activity_level'].replace('moderateactivity',
                                                 'moderate_activity')
 
-# ==========================================
-# BLOCK 3: CATEGORICAL & TIME STANDARD
-# ==========================================
-# region BLOCK 3: CATEGORICAL & TIME STANDARD
-def clean_text_and_time(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Cleans structural text formatting and converts time_of_day from an object 
-    datatype into a standardized string format for categorical tracking.
-    """
-    print("[Block 3] Standardizing text inputs and cleaning categorical voids...")
-    
-    # Strip spaces and lowercase all text features to eliminate string duplicate classes
-    text_cols = ['hvac_operation_mode', 'activity_level']
-    for col in text_cols:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().str.lower().str.replace(' ', '_')
-            df[col] = df[col].replace('nan', np.nan)
-            
-    # Rationale: Ensure time_of_day format is standardized uniformly
-    if 'time_of_day' in df.columns:
-        df['time_of_day'] = df['time_of_day'].astype(str).str.strip().str.lower()
-        
-    return df
-# endregion
-
+# drop session_id as not needed for model training
+dfv2 = df.copy().drop('session_id', axis=1)
 
 # ==========================================
 # BLOCK 4: RE-CALIBRATING TEMPERATURE OUTLIERS

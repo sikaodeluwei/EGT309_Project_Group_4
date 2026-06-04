@@ -133,3 +133,13 @@ hvac_mode_classes = dfv4['hvac_operation_mode'].unique()
 hvac_mode_mapping = {mode: i for i, mode in enumerate(hvac_mode_classes)}
 
 dfv4['hvac_operation_mode'] = dfv4['hvac_operation_mode'].map(hvac_mode_mapping)
+
+# class DataSaver: # left for future modularization
+clean_db_name = 'data/gas_monitoring_cleanedv1.db' # file path
+new_conn = sqlite3.connect(clean_db_name) # db connection
+
+dfv4.to_sql('cleaned_data', new_conn, if_exists='replace', index=False) # save cleaned data to new table in new database (replaces if table already exists, no index column)
+new_conn.close() # close connection
+
+
+print("Finished Running Data Cleaning and Feature Engineering")

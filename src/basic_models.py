@@ -71,9 +71,9 @@ class BasicModelTrainer:
             "Logistic Regression": LogisticRegression(max_iter=1000),
             "K-Nearest Neighbours": KNeighborsClassifier(),
             "Decision Tree": DecisionTreeClassifier(random_state=random_state),
-            "Random Forest": RandomForestClassifier(random_state=random_state, class_weight="balanced", criterion="entropy"),
-            "Gradient Boosting": GradientBoostingClassifier(random_state=random_state, subsample=0.8, max_depth=4),
-            "Extra Trees": ExtraTreesClassifier(random_state=random_state, class_weight="balanced", criterion="entropy"),
+            "Random Forest": RandomForestClassifier(random_state=random_state),
+            "Gradient Boosting": GradientBoostingClassifier(random_state=random_state),
+            "Extra Trees": ExtraTreesClassifier(random_state=random_state),
             "Support Vector Machine": SVC(),
             "Naive Bayes": GaussianNB()
         }

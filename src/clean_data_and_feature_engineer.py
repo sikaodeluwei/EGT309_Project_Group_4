@@ -59,6 +59,16 @@ dfv3['temperature'] = np.where(dfv3['temperature'] > 100, # if temp > 100
                              dfv3['temperature'] - 273.15, # then temp - 273.15
                              dfv3['temperature']) # unchanged if condition unmet
 
+# class DataImputer: # left for future modularization
+
+# impute ambient light level based on time of day
+light_mapping = {'morning': 'dim', 'afternoon': 'very_bright', 'night': 'dark'}
+dfv3['ambient_light_level'] = dfv3['ambient_light_level'].fillna(dfv3['time_of_day'].map(light_mapping))
+dfv3['ambient_light_level'] = dfv3['ambient_light_level'].fillna('np.nan') # optional fallback for any remaining nulls
+
+# impute co_gassensor values based on global median
+dfv3['co_gassensor'] = dfv3['co_gassensor'].fillna(dfv3['co_gassensor'].median())
+
 # ==========================================
 # BLOCK 5: ADVANCED MULTI-VARIABLE DATA IMPUTATION
 # ==========================================

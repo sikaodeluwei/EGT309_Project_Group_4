@@ -38,16 +38,17 @@ class ModelTuner:
             param_grid = self.config['tuning'][name]
             
             grid_search = GridSearchCV(
-                estimator=model,
-                param_grid=param_grid,
-                cv=3,
-                scoring='f1_weighted',
-                n_jobs=-1,
+                estimator=model, 
+                param_grid=param_grid, 
+                cv=3, 
+                scoring='f1_weighted', 
+                n_jobs=-1, # Uses all your CPU cores to finish within the hour
                 verbose=1
             )
             
             grid_search.fit(X_train, y_train)
             best_model = grid_search.best_estimator_
+            best_score = grid_search.best_score_
             
             preds = best_model.predict(X_test)
             score = f1_score(y_test, preds, average='weighted')

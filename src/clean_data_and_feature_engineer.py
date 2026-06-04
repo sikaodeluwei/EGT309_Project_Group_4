@@ -34,20 +34,30 @@ df['activity_level'] = df['activity_level'].replace('moderateactivity',
 # drop session_id as not needed for model training
 dfv2 = df.copy().drop('session_id', axis=1)
 
-# ==========================================
-# BLOCK 4: RE-CALIBRATING TEMPERATURE OUTLIERS
-# ==========================================
-# region BLOCK 4: RE-CALIBRATING TEMPERATURE OUTLIERS
-def fix_temperature_units(df: pd.DataFrame) -> pd.DataFrame:
-    """Transforms raw Kelvin sensor anomalies back to Celsius scale values."""
-    print("[Block 4] Screening temperature parameters for Kelvin unit offsets...")
-    if 'temperature' in df.columns:
-        df['temperature'] = np.where(df['temperature'] > 100, 
-                                      df['temperature'] - 273.15, 
-                                      df['temperature'])
-    return df
-# endregion
+# reordering data table
+# e.g. Columns: ['C', 'A', 'B'] > ['A', 'B', 'C']
+dfv3 = dfv2.copy()[['co_gassensor',
+                    'co2_infraredsensor',
+                    'co2_electrochemicalsensor',
 
+                    'metaloxidesensor_unit1',
+                    'metaloxidesensor_unit2',
+                    'metaloxidesensor_unit3',
+                    'metaloxidesensor_unit4',
+
+                    'temperature',
+                    'humidity',
+                    'ambient_light_level',
+                    'time_of_day',
+
+                    'hvac_operation_mode', 
+                    
+                    'activity_level']]
+
+# convert temperature from Kelvin to Celsius if values are above 100 (assuming all temps above 100 are in Kelvin)
+dfv3['temperature'] = np.where(dfv3['temperature'] > 100, # if temp > 100
+                             dfv3['temperature'] - 273.15, # then temp - 273.15
+                             dfv3['temperature']) # unchanged if condition unmet
 
 # ==========================================
 # BLOCK 5: ADVANCED MULTI-VARIABLE DATA IMPUTATION

@@ -66,67 +66,28 @@ light_mapping = {'morning': 'dim', 'afternoon': 'very_bright', 'night': 'dark'}
 dfv3['ambient_light_level'] = dfv3['ambient_light_level'].fillna(dfv3['time_of_day'].map(light_mapping))
 dfv3['ambient_light_level'] = dfv3['ambient_light_level'].fillna('np.nan') # optional fallback for any remaining nulls
 
-# impute co_gassensor values based on global median
+# impute co_gassensor values based on global median (temporary)
 dfv3['co_gassensor'] = dfv3['co_gassensor'].fillna(dfv3['co_gassensor'].median())
 
-# ==========================================
-# BLOCK 5: ADVANCED MULTI-VARIABLE DATA IMPUTATION
-# ==========================================
-# region BLOCK 5: ADVANCED MULTI-VARIABLE DATA IMPUTATION
-def execute_advanced_imputation(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Applies precise domain-driven imputation techniques formulated from 
-    pre-cleaning exploratory data analysis observations.
-    """
-    print("[Block 5] Commencing advanced multi-variable imputation steps...")
-    
-    # FORCE LOWERCASE AGAIN: Absolute safety net for column headers
-    df.columns = df.columns.str.strip().str.lower()
-    print(f"    -> Current available columns: {list(df.columns)}")
+# -------------------------------------------------------------
+# C. Impute MetalOxideSensor_Unit2 via cross-unit sister medians
+# -------------------------------------------------------------
+unit_cols = ['metaloxidesensor_unit1', 'metaloxidesensor_unit3', 'metaloxidesensor_unit4']
+if 'metaloxidesensor_unit2' in df.columns and all(col in df.columns for col in unit_cols):
+    sibling_median = df[unit_cols].median(axis=1)
+    df['metaloxidesensor_unit2'] = df['metaloxidesensor_unit2'].fillna(sibling_median)
 
-    # -------------------------------------------------------------
-    # A. Impute Ambient Light Level using Time of Day
-    # -------------------------------------------------------------
-    if 'ambient_light_level' in df.columns and 'time_of_day' in df.columns:
-        light_mapping = {'morning': 'dim', 'afternoon': 'very_bright', 'night': 'dark'}
-        df['ambient_light_level'] = df['ambient_light_level'].fillna(df['time_of_day'].map(light_mapping))
-        df['ambient_light_level'] = df['ambient_light_level'].fillna('unknown')
+# -------------------------------------------------------------
+# D. Impute Carbon Monoxide (CO) via CO2 behaviors
+# -------------------------------------------------------------
+if 'co_gassensor' in df.columns:
+    df['co_gassensor'] = np.where(df['co_gassensor'] < 0, np.nan, df['co_gassensor'])
+    if 'time_of_day' in df.columns:
+        contextual_co_median = df.groupby(['time_of_day'])['co_gassensor'].transform('median')
+        df['co_gassensor'] = df['co_gassensor'].fillna(contextual_co_median)
+    else:
+        df['co_gassensor'] = df['co_gassensor'].fillna(df['co_gassensor'].median())
 
-    # -------------------------------------------------------------
-    # B. Impute Humidity derived from Time of Day & Temperature Group Medians
-    # -------------------------------------------------------------
-    if 'humidity' in df.columns:
-        df['humidity'] = np.where(df['humidity'] < 0, np.nan, df['humidity'])
-        
-        # Safe Check: Ensure time_of_day exists before grouping, otherwise fallback to global median
-        if 'time_of_day' in df.columns:
-            grouped_humidity = df.groupby(['time_of_day'])['humidity'].transform('median')
-            df['humidity'] = df['humidity'].fillna(grouped_humidity)
-        else:
-            print("    [Warning] 'time_of_day' column missing for group-by! Falling back to global median.")
-            df['humidity'] = df['humidity'].fillna(df['humidity'].median())
-
-    # -------------------------------------------------------------
-    # C. Impute MetalOxideSensor_Unit2 via cross-unit sister medians
-    # -------------------------------------------------------------
-    unit_cols = ['metaloxidesensor_unit1', 'metaloxidesensor_unit3', 'metaloxidesensor_unit4']
-    if 'metaloxidesensor_unit2' in df.columns and all(col in df.columns for col in unit_cols):
-        sibling_median = df[unit_cols].median(axis=1)
-        df['metaloxidesensor_unit2'] = df['metaloxidesensor_unit2'].fillna(sibling_median)
-
-    # -------------------------------------------------------------
-    # D. Impute Carbon Monoxide (CO) via CO2 behaviors
-    # -------------------------------------------------------------
-    if 'co_gassensor' in df.columns:
-        df['co_gassensor'] = np.where(df['co_gassensor'] < 0, np.nan, df['co_gassensor'])
-        if 'time_of_day' in df.columns:
-            contextual_co_median = df.groupby(['time_of_day'])['co_gassensor'].transform('median')
-            df['co_gassensor'] = df['co_gassensor'].fillna(contextual_co_median)
-        else:
-            df['co_gassensor'] = df['co_gassensor'].fillna(df['co_gassensor'].median())
-
-    return df
-# endregion
 
 
 # ==========================================
@@ -143,22 +104,4 @@ def save_clean_data(df: pd.DataFrame, conn):
     # Save back to SQLite table as required by the pipeline structure
     df.to_sql('cleaned_gas_data', conn, if_exists='replace', index=False)
     print("SUCCESS: Advanced data cleaning completed successfully!")
-# endregion
-
-
-# ==========================================
-# ENGINE RUN EXECUTION
-# ==========================================
-# region PIPELINE RUN ENGINE
-if __name__ == "__main__":
-    db_conn = get_db_connection()
-    
-    # Run the updated modular process flow sequential blocks
-    working_df = load_and_orient_data(db_conn)
-    working_df = clean_text_and_time(working_df)
-    working_df = fix_temperature_units(working_df)
-    working_df = execute_advanced_imputation(working_df)
-    
-    save_clean_data(working_df, db_conn)
-    db_conn.close()
 # endregion

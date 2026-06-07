@@ -3,19 +3,127 @@ config.py
 
 Stores user-adjustable settings for the ML pipeline.
 This file is not meant to be run directly.
-Other files such as base_model_v2.py import settings from here.
+
+Other files such as base_model_v2.py and model_evaluation.py
+import settings from here.
 """
 
 import os
 
 
 # -----------------------------
+# DataLoader
+# -----------------------------
+
+LOADER_DB_PATH: str = "gas_monitoring.db"
+LOADER_QUERY: str = "SELECT * FROM gas_monitoring;"
+
+# -----------------------------
+# DataUniformer
+# -----------------------------
+
+# Columns that must be cast to str before normalisation
+UNIFORMER_CATEGORICAL_COLS: list[str] = [
+    "Time of Day",
+    "HVAC Operation Mode",
+    "Ambient Light Level",
+    "Activity Level",
+]
+
+# -----------------------------
+# DataImputer
+# -----------------------------
+
+# Fallback ambient-light value inferred from time-of-day when light is missing
+IMPUTER_LIGHT_FROM_TIME: dict[str, str] = {
+    "morning": "dim",
+    "afternoon": "very_bright",
+    "night": "dark",
+}
+
+# Known label inconsistencies in activity_level: {raw_value: corrected_value}
+UNIFORMER_ACTIVITY_FIXES: dict[str, str] = {
+    "lowactivity": "low_activity",
+    "moderateactivity": "moderate_activity",
+}
+
+# -----------------------------
+# DataCleaner
+# -----------------------------
+
+# Desired column order in the cleaned dataset (unlisted columns are dropped)
+CLEANER_COLUMN_ORDER: list[str] = [
+    "co_gassensor",
+    "co2_infraredsensor",
+    "co2_electrochemicalsensor",
+    "metaloxidesensor_unit1",
+    "metaloxidesensor_unit2",
+    "metaloxidesensor_unit3",
+    "metaloxidesensor_unit4",
+    "temperature",
+    "humidity",
+    "ambient_light_level",
+    "time_of_day",
+    "hvac_operation_mode",
+    "activity_level",
+]
+
+# Temperatures above this threshold (K) are converted to Celsius (value − 273.15)
+CLEANER_KELVIN_THRESHOLD: float = 150.0
+
+# Sentinel string in ambient_light_level that is treated as NaN
+CLEANER_LIGHT_SENTINEL: str = "none"
+
+# -----------------------------
+# FeatureEngineer
+# -----------------------------
+
+FEATURE_TIME_OF_DAY_MAP: dict[str, int] = {
+    "morning": 0,
+    "afternoon": 1,
+    "evening": 2,
+    "night": 3,
+}
+
+FEATURE_AMBIENT_LIGHT_MAP: dict[str, int] = {
+    "very_dim": 0,
+    "dim": 1,
+    "moderate": 2,
+    "bright": 3,
+    "very_bright": 4,
+}
+
+FEATURE_ACTIVITY_LEVEL_MAP: dict[str, int] = {
+    "low_activity": 0,
+    "moderate_activity": 1,
+    "high_activity": 2,
+}
+
+# ---------------------------------------------------------------------------
+# DataSaver
+# ---------------------------------------------------------------------------
+
+SAVER_DB_PATH: str = "data/gas_monitoring_cleaned.db"
+SAVER_TABLE_NAME: str = "cleaned_data"
+
+
+# -----------------------------
 # Data settings
 # -----------------------------
 
-DB_PATH = "data/gas_monitoring.db"
-TABLE_NAME = "cleaned_gas_data"
-TARGET_COLUMN = "activity level"
+# New cleaned database file
+DB_PATH = "data/gas_monitoring_cleaned.db"
+
+# New cleaned table name inside the database
+TABLE_NAME = "cleaned_data"
+
+# New target column name
+TARGET_COLUMN = "activity_level"
+
+
+# -----------------------------
+# Train-test and scoring settings
+# -----------------------------
 
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
@@ -27,14 +135,22 @@ SCORING_METRIC = "weighted_f1_score"
 # -----------------------------
 
 RESULTS_DIR = "saved_model"
-RESULTS_CSV_PATH = os.path.join(RESULTS_DIR, "basic_model_comparison_results.csv")
-BEST_MODEL_NAMES_PATH = os.path.join(RESULTS_DIR, "best_3_model_names.csv")
+
+RESULTS_CSV_PATH = os.path.join(
+    RESULTS_DIR,
+    "basic_model_comparison_results.csv"
+)
+
+BEST_MODEL_NAMES_PATH = os.path.join(
+    RESULTS_DIR,
+    "best_3_model_names.csv"
+)
 
 
 # -----------------------------
 # Candidate models for baseline comparison
-# base_model_v2.py will test these models first.
-# At this stage, we do not know the top 3 yet.
+# base_model_v2.py will train these models first.
+# At this stage, we do not assume the top 3 models yet.
 # -----------------------------
 
 SELECTED_MODELS = [
@@ -52,6 +168,8 @@ SELECTED_MODELS = [
 # -----------------------------
 # Base model parameters
 # These are used for the first baseline comparison.
+# Most models use basic/default parameters so that the first comparison
+# is a fair baseline before tuning.
 # -----------------------------
 
 BASE_MODEL_PARAMS = {
@@ -84,10 +202,11 @@ BASE_MODEL_PARAMS = {
 
 
 # -----------------------------
-# Hyperparameter grids for next member
-# Evaluation/tuning file will read the top 3 model names from:
-# saved_model/best_3_model_names.csv
-# Then it will use the matching grid below.
+# Hyperparameter grids for tuning stage
+# The next member's evaluation/tuning file will:
+# 1. Read best_3_model_names.csv
+# 2. Get the selected top 3 model names
+# 3. Use the matching parameter grid below for tuning
 # -----------------------------
 
 TUNING_PARAM_GRIDS = {

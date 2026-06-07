@@ -1,4 +1,9 @@
+# Trained model files
 *.pkl
-saved_model/*.pkl
 
-saved_model/*.pkl
+# Python cache files
+__pycache__/
+*.pyc
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/

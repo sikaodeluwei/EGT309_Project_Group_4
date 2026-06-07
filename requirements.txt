@@ -1,6 +1,8 @@
 pandas
-openpyxl
-jupyterlab
+numpy
 scikit-learn
+openpyxl
 matplotlib
 seaborn
+jupyter
+notebook

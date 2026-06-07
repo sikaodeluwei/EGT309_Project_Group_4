@@ -3,11 +3,15 @@ import pandas as pd
 import numpy as np
 import sqlite3
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.impute import KNNImputer
+
+import config
+
 
 class DataLoader:
-    """Connects to database and loads raw data"""
+    """Handles database connection and raw data loading."""
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str = config.LOADER_DB_PATH):
         self.db_path = db_path
         self.conn = None
 
@@ -15,7 +19,7 @@ class DataLoader:
         self.conn = sqlite3.connect(self.db_path)
         return self
 
-    def load(self, query: str = "SELECT * FROM gas_monitoring;") -> pd.DataFrame:
+    def load(self, query: str = config.LOADER_QUERY) -> pd.DataFrame:
         if self.conn is None:
             raise RuntimeError("Call connect() before load().")
         return pd.read_sql_query(query, self.conn)
@@ -24,22 +28,23 @@ class DataLoader:
         if self.conn:
             self.conn.close()
 
+
 class DataUniformer:
     """Normalises column names and cell values; corrects known label inconsistencies."""
 
-    CATEGORICAL_COLS = ['Time of Day', 'HVAC Operation Mode',
-                        'Ambient Light Level', 'Activity Level']
-
-    ACTIVITY_FIXES = {
-        'lowactivity': 'low_activity',
-        'moderateactivity': 'moderate_activity',
-    }
+    def __init__(
+        self,
+        categorical_cols: list[str] = config.UNIFORMER_CATEGORICAL_COLS,
+        activity_fixes: dict[str, str] = config.UNIFORMER_ACTIVITY_FIXES,
+    ):
+        self.categorical_cols = categorical_cols
+        self.activity_fixes = activity_fixes
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
 
         # Ensure categorical columns are str dtype
-        existing = [c for c in self.CATEGORICAL_COLS if c in df.columns]
+        existing = [c for c in self.categorical_cols if c in df.columns]
         df = df.astype({c: str for c in existing})
 
         # Normalise column names
@@ -52,18 +57,19 @@ class DataUniformer:
 
         # Fix known label inconsistencies in activity_level
         if 'activity_level' in df.columns:
-            df['activity_level'] = df['activity_level'].replace(self.ACTIVITY_FIXES)
+            df['activity_level'] = df['activity_level'].replace(self.activity_fixes)
 
         return df
-    
+
+
 class DataImputer:
     """Fills missing values using domain-aware strategies."""
 
-    LIGHT_FROM_TIME = {
-        'morning': 'dim',
-        'afternoon': 'very_bright',
-        'night': 'dark',
-    }
+    def __init__(
+        self,
+        light_from_time: dict[str, str] = config.IMPUTER_LIGHT_FROM_TIME,
+    ):
+        self.light_from_time = light_from_time
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -71,9 +77,23 @@ class DataImputer:
         # Ambient light level: impute from time of day, then fallback
         if 'ambient_light_level' in df.columns and 'time_of_day' in df.columns:
             df['ambient_light_level'] = df['ambient_light_level'].fillna(
-                df['time_of_day'].map(self.LIGHT_FROM_TIME)
+                df['time_of_day'].map(self.light_from_time)
             )
             df['ambient_light_level'] = df['ambient_light_level'].fillna(np.nan)
+
+        # Humidity: impute out-of-bounds values using Temperature via KNN
+        if 'humidity' in df.columns and 'temperature' in df.columns:
+            # Convert invalid humidity values (< 0 or > 100) to NaN so KNNImputer recognizes them
+            invalid_humidity_mask = (df['humidity'] < 0) | (df['humidity'] > 100)
+            df.loc[invalid_humidity_mask, 'humidity'] = np.nan
+
+            # Extract only the columns needed for this specific imputation
+            # (KNN relies on distance, so including unrelated columns might distort results)
+            impute_cols = ['temperature', 'humidity']
+            
+            # Fit and transform the subset, then map it back to the dataframe
+            # Note: KNNImputer returns a numpy array, so we grab the second column [:, 1] for humidity
+            df['humidity'] = self.knn_imputer.fit_transform(df[impute_cols])[:, 1]
 
         # CO sensor: impute with global median
         if 'co_gassensor' in df.columns:
@@ -112,21 +132,15 @@ class DataImputer:
 class DataCleaner:
     """Applies column selection, temperature conversion, and row deduplication."""
 
-    COLUMN_ORDER = [
-        'co_gassensor',
-        'co2_infraredsensor',
-        'co2_electrochemicalsensor',
-        'metaloxidesensor_unit1',
-        'metaloxidesensor_unit2',
-        'metaloxidesensor_unit3',
-        'metaloxidesensor_unit4',
-        'temperature',
-        'humidity',
-        'ambient_light_level',
-        'time_of_day',
-        'hvac_operation_mode',
-        'activity_level',
-    ]
+    def __init__(
+        self,
+        column_order: list[str] = config.CLEANER_COLUMN_ORDER,
+        kelvin_threshold: float = config.CLEANER_KELVIN_THRESHOLD,
+        light_sentinel: str = config.CLEANER_LIGHT_SENTINEL,
+    ):
+        self.column_order = column_order
+        self.kelvin_threshold = kelvin_threshold
+        self.light_sentinel = light_sentinel
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -135,51 +149,51 @@ class DataCleaner:
         df = df.drop(columns=['session_id'], errors='ignore')
 
         # Reorder columns (keep only those that exist)
-        ordered = [c for c in self.COLUMN_ORDER if c in df.columns]
+        ordered = [c for c in self.column_order if c in df.columns]
         df = df[ordered]
 
-        # Convert temperature from Kelvin to Celsius where > 150 K
+        # Convert temperature from Kelvin to Celsius where > threshold
         if 'temperature' in df.columns:
             df['temperature'] = np.where(
-                df['temperature'] > 150,
+                df['temperature'] > self.kelvin_threshold,
                 df['temperature'] - 273.15,
                 df['temperature'],
             )
 
-        # Replace sentinel 'none' with NaN, then drop remaining nulls
+        # Replace sentinel value with NaN, then drop remaining nulls
         df['ambient_light_level'] = df['ambient_light_level'].replace(
-            'none', np.nan)
+            self.light_sentinel, np.nan)
         df.dropna(inplace=True)
         df.drop_duplicates(inplace=True)
 
         return df
 
+
 class FeatureEngineer:
     """Encodes categorical features as integers."""
 
-    TIME_OF_DAY_MAP = {'morning': 0, 'afternoon': 1, 'evening': 2, 'night': 3}
-
-    AMBIENT_LIGHT_MAP = {
-        'very_dim': 0, 'dim': 1, 'moderate': 2, 'bright': 3, 'very_bright': 4
-    }
-
-    ACTIVITY_LEVEL_MAP = {
-        'low_activity': 0, 'moderate_activity': 1, 'high_activity': 2
-    }
+    def __init__(
+        self,
+        time_of_day_map: dict[str, int] = config.FEATURE_TIME_OF_DAY_MAP,
+        ambient_light_map: dict[str, int] = config.FEATURE_AMBIENT_LIGHT_MAP,
+        activity_level_map: dict[str, int] = config.FEATURE_ACTIVITY_LEVEL_MAP,
+    ):
+        self.time_of_day_map = time_of_day_map
+        self.ambient_light_map = ambient_light_map
+        self.activity_level_map = activity_level_map
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
 
         if 'time_of_day' in df.columns:
-            df['time_of_day'] = df['time_of_day'].map(self.TIME_OF_DAY_MAP)
+            df['time_of_day'] = df['time_of_day'].map(self.time_of_day_map)
 
         if 'ambient_light_level' in df.columns:
             df['ambient_light_level'] = df['ambient_light_level'].map(
-                self.AMBIENT_LIGHT_MAP)
+                self.ambient_light_map)
 
         if 'activity_level' in df.columns:
-            df['activity_level'] = df['activity_level'].map(
-                self.ACTIVITY_LEVEL_MAP)
+            df['activity_level'] = df['activity_level'].map(self.activity_level_map)
 
         # Integer encoding for HVAC mode (ordinal by discovery order)
         # TODO: replace with One-Hot Encoding
@@ -190,24 +204,26 @@ class FeatureEngineer:
 
         return df
 
+
 class DataSaver:
     """Persists a DataFrame to a SQLite database."""
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str = config.SAVER_DB_PATH):
         self.db_path = db_path
 
-    def save(self, df: pd.DataFrame, table_name: str = 'cleaned_data'):
+    def save(self, df: pd.DataFrame, table_name: str = config.SAVER_TABLE_NAME):
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         conn = sqlite3.connect(self.db_path)
         df.to_sql(table_name, conn, if_exists='replace', index=False)
         conn.close()
+
 
 # ---------------------------------------------------------------------------
 # Pipeline execution
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    loader = DataLoader("gas_monitoring.db")
+    loader = DataLoader()
     loader.connect()
     df = loader.load()
     loader.close()
@@ -217,6 +233,6 @@ if __name__ == '__main__':
     df = DataCleaner().transform(df)
     df = FeatureEngineer().transform(df)
 
-    DataSaver('data/gas_monitoring_cleanedv1.db').save(df)
+    DataSaver().save(df)
 
     print("Finished Running Data Cleaning and Feature Engineering")

@@ -4,7 +4,7 @@
 
 # Section 1: Python file developers
 - zhenyu: config.py, base model.py
-- aadarsh:
+- aadarsh: tuning.py, evaluation.py
 - junhian: config.py, clean_data_and_feature_engineering
 
 # Section 2: How to run the pipeline
@@ -93,6 +93,14 @@ The candidate models included Logistic Regression, K-Nearest Neighbours, Decisio
 
 The purpose of this stage was to avoid manually guessing the best models. Instead, the baseline model file ranked all candidate models based on weighted F1-score and saved the top three model names into `saved_model/best_3_model_names.csv`.
 
-## 6.2(aadarsh do for the top 3)
+## 6.2 Hyperparameter Tuning
+Top 3 Models Optimized: Random Forest, Extra Trees, and Gradient Boosting were tuned using stratified cross-validation (src/tuning.py).
+Cost-Sensitive Learning: Injected class_weight='balanced' into Random Forest and Extra Trees to counteract severe class imbalance (High Activity: 929 samples vs. Moderate Activity: 176 samples). This heavily penalized minority class misclassifications.
+Grid Search Settings: Fine-tuned n_estimators (up to 300 for voting stability) and max_depth (None, 10, 20 to prevent overfitting).
+Champion Model: Extra Trees Classifier won, achieving a peak team score of 0.6757 Weighted $F_1$-Score (a +2.41% absolute improvement over the baseline).
 
 # section 7: Explain any specific choice of metrics that are important to the problem statement
+Why Accuracy Was Rejected: Raw accuracy is misleading due to data imbalance; a model could guess "High Activity" every time and look accurate while failing completely to detect an unconscious or fallen senior.
+Weighted $F_1$-Score (Primary Metric): Calculates the balance between Precision and Recall while accounting for the row count of each class. Ensures the model is structurally stable across all three activity levels.
+Class-Specific Recall (Safety Priority): Measures the system's sensitivity to risk. Minimizes dangerous False Negatives (e.g., missing an emergency). Tuning pushed Low Activity Recall to 70%, successfully catching 357 out of 511 low-activity crisis states.
+Precision (Anti-Alarm Fatigue): Measures accuracy of triggered alerts. Maintaining a 55% Precision profile for Low Activity ensures family or emergency services are not spammed with false alarms, preventing them from ignoring real notifications.

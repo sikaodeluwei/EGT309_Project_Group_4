@@ -10,7 +10,7 @@ import settings from here.
 
 import os
 
-<<<<<<< HEAD
+
 # -----------------------------
 # DataLoader
 # -----------------------------
@@ -105,8 +105,7 @@ FEATURE_ACTIVITY_LEVEL_MAP: dict[str, int] = {
 
 SAVER_DB_PATH: str = "data/gas_monitoring_cleaned.db"
 SAVER_TABLE_NAME: str = "cleaned_data"
-=======
->>>>>>> 30a54ed (Update baseline model config for cleaned database)
+
 
 # -----------------------------
 # Data settings

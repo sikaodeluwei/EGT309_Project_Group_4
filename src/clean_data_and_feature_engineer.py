@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import numpy as np
 import sqlite3
-from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.impute import KNNImputer
 
 import config
@@ -68,8 +67,11 @@ class DataImputer:
     def __init__(
         self,
         light_from_time: dict[str, str] = config.IMPUTER_LIGHT_FROM_TIME,
+        n_neighbors: int = 5
     ):
         self.light_from_time = light_from_time
+        # Initialize the KNN imputer here
+        self.knn_imputer = KNNImputer(n_neighbors=n_neighbors)
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()

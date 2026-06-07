@@ -100,7 +100,7 @@ FEATURE_ACTIVITY_LEVEL_MAP: dict[str, int] = {
 # DataSaver
 # ---------------------------------------------------------------------------
 
-SAVER_DB_PATH: str = "data/gas_monitoring_cleanedv1.db"
+SAVER_DB_PATH: str = "data/gas_monitoring_cleaned.db"
 SAVER_TABLE_NAME: str = "cleaned_data"
 
 # -----------------------------

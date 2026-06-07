@@ -3,25 +3,33 @@ evaluation.py
 Extracts comprehensive metrics, confusion matrices, and feature importance from tuned models.
 """
 import os
-import yaml
+import sys
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix
+
+# =========================================================================
+# PATH FIX: Tell Python to look at your exact directory structure.
+# =========================================================================
+project_root = r"C:\Users\aadar\EGT309_Project_Group_4"
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Fixed import to target config inside the src directory
+from src.config import TARGET_COLUMN, RANDOM_STATE
 from src.basic_models import BasicModelTrainer
 
 class ModelEvaluator:
-    def __init__(self, config_path="config.yaml"):
-        with open(config_path, "r") as f:
-            self.config = yaml.safe_load(f)
-        self.trainer = BasicModelTrainer(random_state=self.config['data']['random_state'])
+    def __init__(self):
+        self.trainer = BasicModelTrainer(random_state=RANDOM_STATE)
         self.models_path = os.path.join("saved_model", "tuned_best_models.pkl")
         
     def generate_assessment_reports(self):
         df = self.trainer.load_cleaned_data()
         
-        raw_features = df.drop(columns=[self.config['data']['target_column']])
+        raw_features = df.drop(columns=[TARGET_COLUMN])
         if "session id" in raw_features.columns:
             raw_features = raw_features.drop(columns=["session id"])
         feature_names = raw_features.columns.tolist()

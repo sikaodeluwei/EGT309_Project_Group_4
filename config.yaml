@@ -18,8 +18,7 @@ tuning:
     min_samples_split: [2, 5]
 
   Gradient Boosting:
-    n_estimators: [100, 200]
-    learning_rate: [0.1, 0.2]
-    max_depth: [3, 5]
-    subsample: [0.8]
-    subsample: [0.8, 1.0]
+    n_estimators: [100]        # Dropped 200 and 300 to eliminate sequential loops
+    learning_rate: [0.1]       # Kept the industry standard default rate
+    max_depth: [3]             # Kept shallow trees (super fast to calculate)
+    subsample: [0.8]           # Keeps stochastic speed optimization

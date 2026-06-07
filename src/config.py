@@ -3,11 +3,14 @@ config.py
 
 Stores user-adjustable settings for the ML pipeline.
 This file is not meant to be run directly.
-Other files such as base_model_v2.py import settings from here.
+
+Other files such as base_model_v2.py and model_evaluation.py
+import settings from here.
 """
 
 import os
 
+<<<<<<< HEAD
 # -----------------------------
 # DataLoader
 # -----------------------------
@@ -102,14 +105,26 @@ FEATURE_ACTIVITY_LEVEL_MAP: dict[str, int] = {
 
 SAVER_DB_PATH: str = "data/gas_monitoring_cleaned.db"
 SAVER_TABLE_NAME: str = "cleaned_data"
+=======
+>>>>>>> 30a54ed (Update baseline model config for cleaned database)
 
 # -----------------------------
 # Data settings
 # -----------------------------
 
-DB_PATH = "data/gas_monitoring.db"
-TABLE_NAME = "cleaned_gas_data"
-TARGET_COLUMN = "activity level"
+# New cleaned database file
+DB_PATH = "data/gas_monitoring_cleaned.db"
+
+# New cleaned table name inside the database
+TABLE_NAME = "cleaned_data"
+
+# New target column name
+TARGET_COLUMN = "activity_level"
+
+
+# -----------------------------
+# Train-test and scoring settings
+# -----------------------------
 
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
@@ -121,14 +136,22 @@ SCORING_METRIC = "weighted_f1_score"
 # -----------------------------
 
 RESULTS_DIR = "saved_model"
-RESULTS_CSV_PATH = os.path.join(RESULTS_DIR, "basic_model_comparison_results.csv")
-BEST_MODEL_NAMES_PATH = os.path.join(RESULTS_DIR, "best_3_model_names.csv")
+
+RESULTS_CSV_PATH = os.path.join(
+    RESULTS_DIR,
+    "basic_model_comparison_results.csv"
+)
+
+BEST_MODEL_NAMES_PATH = os.path.join(
+    RESULTS_DIR,
+    "best_3_model_names.csv"
+)
 
 
 # -----------------------------
 # Candidate models for baseline comparison
-# base_model_v2.py will test these models first.
-# At this stage, we do not know the top 3 yet.
+# base_model_v2.py will train these models first.
+# At this stage, we do not assume the top 3 models yet.
 # -----------------------------
 
 SELECTED_MODELS = [
@@ -146,6 +169,8 @@ SELECTED_MODELS = [
 # -----------------------------
 # Base model parameters
 # These are used for the first baseline comparison.
+# Most models use basic/default parameters so that the first comparison
+# is a fair baseline before tuning.
 # -----------------------------
 
 BASE_MODEL_PARAMS = {
@@ -178,10 +203,11 @@ BASE_MODEL_PARAMS = {
 
 
 # -----------------------------
-# Hyperparameter grids for next member
-# Evaluation/tuning file will read the top 3 model names from:
-# saved_model/best_3_model_names.csv
-# Then it will use the matching grid below.
+# Hyperparameter grids for tuning stage
+# The next member's evaluation/tuning file will:
+# 1. Read best_3_model_names.csv
+# 2. Get the selected top 3 model names
+# 3. Use the matching parameter grid below for tuning
 # -----------------------------
 
 TUNING_PARAM_GRIDS = {

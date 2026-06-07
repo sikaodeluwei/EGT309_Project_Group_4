@@ -2,3 +2,6 @@
 saved_model/*.pkl
 
 saved_model/*.pkl
+
+__pycache__/
+*.pyc

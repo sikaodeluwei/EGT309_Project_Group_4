@@ -9,12 +9,16 @@
 
 # Section 2: How to run the pipeline
 
-Two Methods:
-- run pipeline.py file
+Methods:
+- run run.sh file
 
 OR
 
-- run clean_data_and_feature_engineering > 
+- run clean_data_and_feature_engineering >
+
+OR
+
+- use Dockerfile
 
 # Section 3: docker environment(decide later we doing or not)
 
@@ -86,12 +90,17 @@ Preprocessing Rationale
 
 # Section 6: Explanation of choice of models (train at least 3 models) and justify any tuning methods used
 ## 6.1 Baseline Model Selection
+The prediction task in this project is treated as a classification problem because the target variable is `activity_level`. The goal is to predict the elderly resident’s activity level based on environmental and sensor-related features such as temperature, humidity, CO2 sensor readings, gas sensor readings, HVAC operation mode, ambient light level, and time of day.
 
-Before selecting the final models, multiple candidate classification models were trained and compared using the same cleaned dataset. The target variable was `activity level`, making this a multi-class classification problem.
+Before selecting the final models, multiple candidate baseline classifiers were trained and compared using the same cleaned dataset. This was done so that the best models were selected based on actual model performance instead of assumptions. The candidate models used were Logistic Regression, K-Nearest Neighbours, Decision Tree, Random Forest, Gradient Boosting, Extra Trees, Support Vector Machine, and Naive Bayes.
 
-The candidate models included Logistic Regression, K-Nearest Neighbours, Decision Tree, Random Forest, Gradient Boosting, Extra Trees, Support Vector Machine, and Naive Bayes. These models were chosen to provide a mix of simple baseline models, distance-based models, probabilistic models, and tree-based ensemble models.
+These models were selected because they represent different types of classification approaches. Logistic Regression and Naive Bayes were used as simple baseline models. K-Nearest Neighbours was included as a distance-based model, while Support Vector Machine was included as a boundary-based classifier. Decision Tree was used as an interpretable tree-based model. Random Forest, Extra Trees, and Gradient Boosting were included because ensemble tree models are suitable for tabular sensor data and can capture non-linear relationships between the input features and the activity level.
 
-The purpose of this stage was to avoid manually guessing the best models. Instead, the baseline model file ranked all candidate models based on weighted F1-score and saved the top three model names into `saved_model/best_3_model_names.csv`.
+All baseline models were trained using the same train-test split to ensure a fair comparison. The models were ranked using weighted F1-score instead of accuracy alone because `activity_level` is a multi-class classification target, and the classes may not be evenly distributed. Accuracy can be misleading if one activity class appears more frequently than others. Weighted F1-score considers both precision and recall while also accounting for the number of samples in each class.
+
+The baseline model selection process is implemented in `src/base_model_v2.py`. The file reads user-adjustable settings from `src/config.py`, including the database path, cleaned table name, target column, selected candidate models, base model parameters, and scoring metric. After training and comparing the candidate models, the file saves the full comparison results into `saved_model/basic_model_comparison_results.csv` and saves the selected best three model names into `saved_model/best_3_model_names.csv`.
+
+This output is then used by the tuning and evaluation stage. Instead of manually choosing the final models, the next stage can read `best_3_model_names.csv` and fine-tune only the three models selected from the baseline comparison.
 
 ## 6.2 Hyperparameter Tuning
 Top 3 Models Optimized: Random Forest, Extra Trees, and Gradient Boosting were tuned using stratified cross-validation (src/tuning.py).

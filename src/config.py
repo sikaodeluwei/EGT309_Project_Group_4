@@ -30,21 +30,21 @@ UNIFORMER_CATEGORICAL_COLS: list[str] = [
     "Activity Level",
 ]
 
+UNIFORMER_ACTIVITY_FIXES: dict[str, str] = {
+    "lowactivity": "low_activity",
+    "moderateactivity": "moderate_activity",
+    "highactivity": "high_activity",
+}
+
 # -----------------------------
 # DataImputer
 # -----------------------------
 
-# Fallback ambient-light value inferred from time-of-day when light is missing
 IMPUTER_LIGHT_FROM_TIME: dict[str, str] = {
     "morning": "dim",
     "afternoon": "very_bright",
+    "evening": "moderate",
     "night": "dark",
-}
-
-# Known label inconsistencies in activity_level: {raw_value: corrected_value}
-UNIFORMER_ACTIVITY_FIXES: dict[str, str] = {
-    "lowactivity": "low_activity",
-    "moderateactivity": "moderate_activity",
 }
 
 # -----------------------------
@@ -68,6 +68,7 @@ CLEANER_COLUMN_ORDER: list[str] = [
     "activity_level",
 ]
 
+
 # Temperatures above this threshold (K) are converted to Celsius (value − 273.15)
 CLEANER_KELVIN_THRESHOLD: float = 150.0
 
@@ -75,17 +76,17 @@ CLEANER_KELVIN_THRESHOLD: float = 150.0
 CLEANER_LIGHT_SENTINEL: str = "none"
 
 # -----------------------------
-# FeatureEngineer
+# Feature Engineer
 # -----------------------------
 
-FEATURE_TIME_OF_DAY_MAP: dict[str, int] = {
+FE_TIME_OF_DAY_MAP: dict[str, int] = {
     "morning": 0,
     "afternoon": 1,
     "evening": 2,
     "night": 3,
 }
-
-FEATURE_AMBIENT_LIGHT_MAP: dict[str, int] = {
+ 
+FE_AMBIENT_LIGHT_MAP: dict[str, int] = {
     "very_dim": 0,
     "dim": 1,
     "moderate": 2,
@@ -93,7 +94,7 @@ FEATURE_AMBIENT_LIGHT_MAP: dict[str, int] = {
     "very_bright": 4,
 }
 
-FEATURE_ACTIVITY_LEVEL_MAP: dict[str, int] = {
+FE_ACTIVITY_LEVEL_MAP: dict[str, int] = {
     "low_activity": 0,
     "moderate_activity": 1,
     "high_activity": 2,

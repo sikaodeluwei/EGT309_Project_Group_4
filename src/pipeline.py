@@ -2,7 +2,7 @@
 pipeline.py
 
 Full consolidated end-to-end ML pipeline for EGT309 Project Group 4.
-Integrates advanced data transformation, baseline estimator tracking, 
+Integrates advanced data transformation, baseline estimator tracking,
 and automated hyperparameter optimization into a clean OOP architecture.
 """
 
@@ -36,6 +36,9 @@ from sklearn.ensemble import (
 )
 from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
+
+# ─── IMPORT CENTRALIZED CONFIGURATION ───────────────────────────────────────
+import config
 
 # ─── IMPORT CUSTOM TRANSFORMERS ────────────────────────────────────────────
 try:
@@ -71,87 +74,13 @@ def _banner(title: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# ─── CENTRALIZED CONFIGURATION ─────────────────────────────────────────────
+# ─── DERIVED PIPELINE PATHS & VARIABLES ────────────────────────────────────
 # ---------------------------------------------------------------------------
-class ProjectConfig:
-    RAW_DATA_PATH: str = "data/raw_data.xlsx"
-    RESULTS_DIR: str = "saved_model"
-    RESULTS_CSV_PATH: str = "saved_model/baseline_model_comparison.csv"
-    BEST_MODEL_NAMES_PATH: str = "saved_model/best_3_models.csv"
-    TUNED_MODEL_PKL_PATH: str = "saved_model/tuned_best_models.pkl"
-    TUNED_METRICS_CSV_PATH: str = "saved_model/tuned_metrics_summary.csv"
-    
-    TEST_SIZE: float = 0.2
-    RANDOM_STATE: int = 42
-    SCORING_METRIC: str = "weighted_f1_score"
-    TARGET_COLUMN: str = "co_gassensor"
-   
-    # Target Cleanup Dictionary Mapping (from tuning.py standard)
-    UNIFORMER_ACTIVITY_FIXES: dict = {
-        "high activity": "High Activity",
-        "low activity": "Low Activity",
-        "moderate activity": "Moderate Activity"
-    }
+TUNED_MODEL_PKL_PATH: str = os.path.join(config.RESULTS_DIR, "tuned_best_models.pkl")
+TUNED_METRICS_CSV_PATH: str = os.path.join(config.RESULTS_DIR, "tuned_metrics_summary.csv")
 
-    IMPUTER_LIGHT_FROM_TIME: dict = {
-        "morning": "dim",
-        "afternoon": "very_bright",
-        "evening": "moderate",
-        "night": "dark",
-    }
-    FE_TIME_OF_DAY_MAP: dict = {"morning": 0, "afternoon": 1, "evening": 2, "night": 3}
-    FE_AMBIENT_LIGHT_MAP: dict = {
-        "very_dim": 0, "dim": 1, "moderate": 2, "bright": 3, "very_bright": 4
-    }
-    FE_ACTIVITY_LEVEL_MAP: dict = {
-        "low_activity": 0, "moderate_activity": 1, "high_activity": 2
-    }
-   
-    SELECTED_MODELS: list = [
-        "Logistic Regression",
-        "K-Nearest Neighbours",
-        "Decision Tree",
-        "Random Forest",
-        "Gradient Boosting",
-        "Extra Trees",
-        "Support Vector Machine",
-        "Naive Bayes"
-    ]
-
-
-config = ProjectConfig()
-
-BASE_MODEL_PARAMS: dict = {
-    "Logistic Regression":      {"max_iter": 1000},
-    "K-Nearest Neighbours":     {},
-    "Decision Tree":            {"random_state": config.RANDOM_STATE},
-    "Random Forest":            {"random_state": config.RANDOM_STATE},
-    "Gradient Boosting":        {"random_state": config.RANDOM_STATE},
-    "Extra Trees":              {"random_state": config.RANDOM_STATE},
-    "Support Vector Machine":   {},
-    "Naive Bayes":              {},
-}
-
-TUNING_GRIDS: dict = {
-    "Random Forest": {
-        "n_estimators": [300, 400],
-        "max_depth": [20, 30, None],
-        "min_samples_split": [2, 5],
-        "max_features": ["sqrt", "log2"],
-    },
-    "Extra Trees": {
-        "n_estimators": [200, 300],
-        "max_depth": [20, 30, None],
-        "min_samples_split": [2, 5],
-    },
-    "Gradient Boosting": {
-        "learning_rate": [0.05, 0.1],
-        "max_depth": [5, 7],
-        "n_estimators": [200, 300],
-    },
-}
-
-CLASS_MAPPING: list = ["High Activity", "Low Activity", "Moderate Activity"]
+# Dynamically extract target classes from the configuration mapping to maintain a single source of truth
+CLASS_MAPPING: List[str] = sorted(config.FE_ACTIVITY_LEVEL_MAP, key=config.FE_ACTIVITY_LEVEL_MAP.get)
 
 
 # ===========================================================================
@@ -161,7 +90,7 @@ CLASS_MAPPING: list = ["High Activity", "Low Activity", "Moderate Activity"]
 class BasicModelTrainer:
     """
     Handles robust pipeline data preparation, feature splitting, stratified scaling,
-    and trains/ranks baseline estimators using global configurations.
+    and trains/ranks baseline estimators using configurations from config.py.
     """
     def __init__(self):
         self.scaler = StandardScaler()
@@ -171,16 +100,16 @@ class BasicModelTrainer:
 
     def _build_selected_models(self) -> Dict[str, Any]:
         library = {
-            "Logistic Regression":    LogisticRegression(**BASE_MODEL_PARAMS["Logistic Regression"]),
-            "K-Nearest Neighbours":   KNeighborsClassifier(**BASE_MODEL_PARAMS["K-Nearest Neighbours"]),
-            "Decision Tree":          DecisionTreeClassifier(**BASE_MODEL_PARAMS["Decision Tree"]),
-            "Random Forest":          RandomForestClassifier(**BASE_MODEL_PARAMS["Random Forest"]),
-            "Gradient Boosting":      GradientBoostingClassifier(**BASE_MODEL_PARAMS["Gradient Boosting"]),
-            "Extra Trees":            ExtraTreesClassifier(**BASE_MODEL_PARAMS["Extra Trees"]),
-            "Support Vector Machine": SVC(**BASE_MODEL_PARAMS["Support Vector Machine"]),
-            "Naive Bayes":            GaussianNB(**BASE_MODEL_PARAMS["Naive Bayes"]),
+            "Logistic Regression":    LogisticRegression(**config.BASE_MODEL_PARAMS.get("Logistic Regression", {})),
+            "K-Nearest Neighbours":   KNeighborsClassifier(**config.BASE_MODEL_PARAMS.get("K-Nearest Neighbours", {})),
+            "Decision Tree":          DecisionTreeClassifier(**config.BASE_MODEL_PARAMS.get("Decision Tree", {})),
+            "Random Forest":          RandomForestClassifier(**config.BASE_MODEL_PARAMS.get("Random Forest", {})),
+            "Gradient Boosting":      GradientBoostingClassifier(**config.BASE_MODEL_PARAMS.get("Gradient Boosting", {})),
+            "Extra Trees":            ExtraTreesClassifier(**config.BASE_MODEL_PARAMS.get("Extra Trees", {})),
+            "Support Vector Machine": SVC(**config.BASE_MODEL_PARAMS.get("Support Vector Machine", {})),
+            "Naive Bayes":            GaussianNB(**config.BASE_MODEL_PARAMS.get("Naive Bayes", {})),
         }
-       
+        
         selected = {}
         for name in config.SELECTED_MODELS:
             if name in library:
@@ -195,10 +124,9 @@ class BasicModelTrainer:
         if config.TARGET_COLUMN not in df.columns:
             raise ValueError(f"Target column '{config.TARGET_COLUMN}' not found in DataFrame.")
 
-        # Uniform target cleanup logic intercepted from tuning.py rules
-        df[config.TARGET_COLUMN] = df[config.TARGET_COLUMN].astype(str).str.replace("_", " ")
+        # Standardize and clean the target labels using fixes from config.py
+        df[config.TARGET_COLUMN] = df[config.TARGET_COLUMN].astype(str).str.replace("_", "").str.strip().str.lower()
         df[config.TARGET_COLUMN] = df[config.TARGET_COLUMN].map(config.UNIFORMER_ACTIVITY_FIXES).fillna(df[config.TARGET_COLUMN])
-        df[config.TARGET_COLUMN] = df[config.TARGET_COLUMN].str.strip()
 
         X = df.drop(columns=[config.TARGET_COLUMN])
         y = df[config.TARGET_COLUMN]
@@ -243,6 +171,9 @@ class BasicModelTrainer:
 
     def train_and_compare(self, X_train, X_test, y_train, y_test) -> Dict[str, dict]:
         results = {}
+        # Map human-readable config metrics to scikit-learn parameter keys
+        sklearn_metric = "weighted" if config.SCORING_METRIC == "weighted_f1_score" else config.SCORING_METRIC
+        
         for name, model in self.models.items():
             log.info("Training %s ...", name)
             t0 = time.time()
@@ -251,13 +182,13 @@ class BasicModelTrainer:
             y_pred = model.predict(X_test)
            
             acc = accuracy_score(y_test, y_pred)
-            wf1 = f1_score(y_test, y_pred, average="weighted")
+            wf1 = f1_score(y_test, y_pred, average=sklearn_metric)
            
             results[name] = {"model": model, "accuracy": acc, "weighted_f1_score": wf1}
             log.info("  %-26s  acc=%.4f  wF1=%.4f  (%.1fs)", name, acc, wf1, elapsed)
 
         sorted_results = dict(
-            sorted(results.items(), key=lambda x: x[1][config.SCORING_METRIC], reverse=True)
+            sorted(results.items(), key=lambda x: x[1].get(config.SCORING_METRIC, x[1]["weighted_f1_score"]), reverse=True)
         )
         return sorted_results
 
@@ -300,7 +231,6 @@ class ModelTuner:
             print(f"\nRunning ADVANCED Optimization for: {name}...")
             model = self.all_models[name]
            
-            # DYNAMIC INJECTION: Overriding parameters on the fly to deal with imbalance
             if hasattr(model, 'class_weight'):
                 model.class_weight = "balanced"
                 print("   --> Class weights balanced successfully.")
@@ -316,8 +246,7 @@ class ModelTuner:
            
             grid_search.fit(X_train, y_train)
             best_model = grid_search.best_estimator_
-            
-            # Extract true metrics to protect pipeline against hardcoded presentation text
+           
             preds = best_model.predict(X_test)
             test_acc = accuracy_score(y_test, preds)
             test_f1 = f1_score(y_test, preds, average='weighted')
@@ -332,13 +261,11 @@ class ModelTuner:
                 "Optimized_Weighted_F1": f"{test_f1:.4f}"
             })
            
-        # Serialize tuned components to disk
         os.makedirs(os.path.dirname(self.output_pkl_path), exist_ok=True)
         with open(self.output_pkl_path, "wb") as f:
             pickle.dump(tuned_results, f)
         log.info("All optimized tuned model configurations saved to: %s", self.output_pkl_path)
 
-        # Dynamic, production-grade automated tracking output
         if metric_logs:
             df_metrics = pd.DataFrame(metric_logs)
             df_metrics.to_csv(self.output_csv_path, index=False)
@@ -367,7 +294,6 @@ class ModelEvaluator:
             target_labels = self.class_mapping[:unique_classes] if unique_classes <= len(self.class_mapping) else None
             print(classification_report(y_test, preds, target_names=target_labels))
 
-            # Render Matrix Visualizations
             cm = confusion_matrix(y_test, preds)
             fig, ax = plt.subplots(figsize=(6, 5))
             sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
@@ -381,7 +307,7 @@ class ModelEvaluator:
 
 
 # ===========================================================================
-# ─── MAIN EXECUTION BLOCK ────────────────----------------------------------
+# ─── MAIN EXECUTION BLOCK ──────────────────────────────────────────────────
 # ===========================================================================
 
 if __name__ == '__main__':
@@ -393,12 +319,11 @@ if __name__ == '__main__':
     df = loader.load()
     loader.close()
 
-    # Normalize structure across raw data matrices
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
     df = df.map(lambda x: x.lower().replace(' ', '_') if isinstance(x, str) else x)
 
     print("\nInitial Baseline Target Counts:")
-    print(df['activity_level'].value_counts())
+    print(df[config.TARGET_COLUMN].value_counts())
 
     # 2. Sequential Cleaning Transforms
     df = DataUniformer().transform(df)
@@ -420,7 +345,6 @@ if __name__ == '__main__':
     fe.fit(X)
     X_transformed = fe.transform(X)
 
-    # Recombine engineering variables back into unified framework frame
     df_cleaned = X_transformed.copy()
     df_cleaned[config.TARGET_COLUMN] = y.values
 
@@ -446,9 +370,9 @@ if __name__ == '__main__':
     # 5. Dynamic Hyperparameter Optimization (ModelTuner Execution)
     tuner = ModelTuner(
         all_models=trainer.models,
-        tuning_grids=TUNING_GRIDS,
-        output_pkl_path=config.TUNED_MODEL_PKL_PATH,
-        output_csv_path=config.TUNED_METRICS_CSV_PATH
+        tuning_grids=config.TUNING_PARAM_GRIDS,
+        output_pkl_path=TUNED_MODEL_PKL_PATH,
+        output_csv_path=TUNED_METRICS_CSV_PATH
     )
     tuned_models = tuner.run_tuning(X_train, y_train, X_test, y_test, best_3_names)
    

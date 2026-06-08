@@ -1,4 +1,4 @@
 Model Name,Optimized_Accuracy,Optimized_Weighted_F1
-Random Forest,0.7542,0.7502
-Gradient Boosting,0.7531,0.7500
-Extra Trees,0.6972,0.6911
+Random Forest,0.6396,0.6375
+Extra Trees,0.6255,0.6299
+Gradient Boosting,0.6355,0.6182

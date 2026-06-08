@@ -20,7 +20,22 @@ OR
 
 - use Dockerfile
 
-# Section 3: docker environment(decide later we doing or not)
+# Section 3: docker environment
+
+Docker was included to provide a consistent environment for running the machine learning pipeline. This helps ensure that the project can run with the same Python version and required dependencies on different machines.
+
+The `Dockerfile` installs the required Python packages from `requirements.txt`, copies the project files into the container, and runs the pipeline using `run.sh`.
+
+### Build the Docker Image
+
+From the project root folder, run:
+
+'''bash
+docker build -t egt309-project .
+
+run without docker: 
+pip install -r requirements.txt
+bash run.sh
 
 # Section 4: Summary of key findings of EDA
 Observations

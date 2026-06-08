@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import sqlite3
 from sklearn.impute import KNNImputer
+from sklearn.decomposition import PCA
 
 import config
 
@@ -184,6 +185,35 @@ class FeatureEngineer:
         self.ambient_light_map = ambient_light_map
         self.activity_level_map = activity_level_map
 
+        # Initialize PCA to extract 1 component representing the shared pattern
+        self.mos_pca = PCA(n_components=1)
+        self.is_fitted = False
+
+        # State tracking for One-Hot Encoding, prevents shape mismatches during inference
+        self.hvac_categories = None
+
+    def fit(self, df: pd.DataFrame):
+        """Fits the PCA and records categorical states from training data."""
+        # Fit PCA on Metal Oxide Sensors
+
+        # --- Metal Oxide Sensor Aggregation ---
+        mos_cols = [
+            'MetalOxideSensor_Unit1', 
+            'MetalOxideSensor_Unit2', 
+            'MetalOxideSensor_Unit3', 
+            'MetalOxideSensor_Unit4'
+        ]
+
+        if all(col in df.columns for col in mos_cols):
+            self.mos_pca.fit(df[mos_cols])
+        
+        # Record unique HVAC modes present during training
+        if 'hvac_operation_mode' in df.columns:
+            self.hvac_categories = df['hvac_operation_mode'].dropna().unique().tolist()
+            
+        self.is_fitted = True
+        return self
+
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
 
@@ -197,12 +227,46 @@ class FeatureEngineer:
         if 'activity_level' in df.columns:
             df['activity_level'] = df['activity_level'].map(self.activity_level_map)
 
-        # Integer encoding for HVAC mode (ordinal by discovery order)
-        # TODO: replace with One-Hot Encoding
+        # --- One-Hot Encoding for HVAC ---
         if 'hvac_operation_mode' in df.columns:
-            classes = df['hvac_operation_mode'].unique()
-            hvac_map = {mode: i for i, mode in enumerate(classes)}
-            df['hvac_operation_mode'] = df['hvac_operation_mode'].map(hvac_map)
+            # If categories were recorded during fit, align the column to those categories
+            if self.hvac_categories is not None:
+                df['hvac_operation_mode'] = pd.Categorical(
+                    df['hvac_operation_mode'], categories=self.hvac_categories
+                )
+            
+            # Perform One-Hot Encoding
+            df = pd.get_dummies(
+                df, 
+                columns=['hvac_operation_mode'], 
+                prefix='hvac', 
+                drop_first=True,  # Avoids the dummy variable trap
+                dtype=int
+            )
+
+        # --- Metal Oxide Sensor Aggregation ---
+        mos_cols = [
+            'MetalOxideSensor_Unit1', 
+            'MetalOxideSensor_Unit2', 
+            'MetalOxideSensor_Unit3', 
+            'MetalOxideSensor_Unit4'
+        ]
+        
+        # Ensure all 4 units exist in the DataFrame before aggregating
+        if all(col in df.columns for col in mos_cols):
+            
+            # Drop the original columns to reduce dimensionality
+            df = df.drop(columns=mos_cols)
+
+            if self.is_fitted:
+                # Transform the underlying pattern. 
+                # PCA naturally aligns with the direction of maximum variance (the shared shape).
+                df['MetalOxideSensor_Aggregated'] = self.mos_pca.transform(df[mos_cols])[:, 0]
+            else:
+                df['MetalOxideSensor_Aggregated'] = self.mos_pca.fit_transform(df[mos_cols])[:, 0]
+            
+            # Drop the original columns to reduce dimensionality
+            df = df.drop(columns=mos_cols)
 
         return df
 

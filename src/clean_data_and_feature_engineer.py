@@ -4,6 +4,7 @@ import numpy as np
 import sqlite3
 from sklearn.impute import KNNImputer
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import RobustScaler
 
 import config
 
@@ -105,17 +106,6 @@ class DataImputer:
             )
 
         # -------------------------------------------------------------
-        # Future: Impute MetalOxideSensor_Unit2 via cross-unit sibling medians
-        # -------------------------------------------------------------
-        # unit_cols = ['metaloxidesensor_unit1',
-        #              'metaloxidesensor_unit3', 'metaloxidesensor_unit4']
-        # if 'metaloxidesensor_unit2' in df.columns and \
-        #         all(col in df.columns for col in unit_cols):
-        #     sibling_median = df[unit_cols].median(axis=1)
-        #     df['metaloxidesensor_unit2'] = df['metaloxidesensor_unit2'].fillna(
-        #         sibling_median)
-
-        # -------------------------------------------------------------
         # Future: Impute CO via contextual (time_of_day) median
         # -------------------------------------------------------------
         # if 'co_gassensor' in df.columns:
@@ -185,36 +175,50 @@ class FeatureEngineer:
         self.ambient_light_map = ambient_light_map
         self.activity_level_map = activity_level_map
 
-        # Initialize PCA to extract 1 component representing the shared pattern
+        # PCA for Metal Oxide Sensors to capture shared patterns while reducing dimensionality
         self.mos_pca = PCA(n_components=1)
+        # RobustScaler applied to MOS before PCA — keeps units consistent and suppresses outliers
+        self.mos_scaler = RobustScaler()
+
+        # Using RobustScaler for the final pass to protect KNN from outlier distances
+        self.final_scaler = RobustScaler()
+
+        # Initialize PCA to extract 1 component representing the shared pattern
         self.is_fitted = False
 
         # State tracking for One-Hot Encoding, prevents shape mismatches during inference
         self.hvac_categories = None
 
+
     def fit(self, df: pd.DataFrame):
         """Fits the PCA and records categorical states from training data."""
-        # Fit PCA on Metal Oxide Sensors
 
-        # --- Metal Oxide Sensor Aggregation ---
         mos_cols = [
-            'MetalOxideSensor_Unit1', 
-            'MetalOxideSensor_Unit2', 
-            'MetalOxideSensor_Unit3', 
+            'MetalOxideSensor_Unit1',
+            'MetalOxideSensor_Unit2',
+            'MetalOxideSensor_Unit3',
             'MetalOxideSensor_Unit4'
         ]
 
+        # --- Metal Oxide Sensor Aggregation ---
+        # Fit PCA on the mos_scaler-scaled data
         if all(col in df.columns for col in mos_cols):
-            self.mos_pca.fit(df[mos_cols])
-        
+            scaled_mos = self.mos_scaler.fit_transform(df[mos_cols])
+            self.mos_pca.fit(scaled_mos)
+
         # Record unique HVAC modes present during training
         if 'hvac_operation_mode' in df.columns:
             self.hvac_categories = df['hvac_operation_mode'].dropna().unique().tolist()
-            
+
+        # Fit the final robust scaler on the completely transformed training set
+        temp_df = self._transform_features(df)
+        self.final_scaler.fit(temp_df)
+
         self.is_fitted = True
         return self
 
-    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _transform_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Helper to apply mappings, OHE, and PCA processing."""
         df = df.copy()
 
         if 'time_of_day' in df.columns:
@@ -230,46 +234,57 @@ class FeatureEngineer:
         # --- One-Hot Encoding for HVAC ---
         if 'hvac_operation_mode' in df.columns:
             # If categories were recorded during fit, align the column to those categories
+            # so inference never produces new columns that would break the final scaler
             if self.hvac_categories is not None:
                 df['hvac_operation_mode'] = pd.Categorical(
                     df['hvac_operation_mode'], categories=self.hvac_categories
                 )
-            
-            # Perform One-Hot Encoding
+
             df = pd.get_dummies(
-                df, 
-                columns=['hvac_operation_mode'], 
-                prefix='hvac', 
+                df,
+                columns=['hvac_operation_mode'],
+                prefix='hvac',
                 drop_first=True,  # Avoids the dummy variable trap
                 dtype=int
             )
 
         # --- Metal Oxide Sensor Aggregation ---
         mos_cols = [
-            'MetalOxideSensor_Unit1', 
-            'MetalOxideSensor_Unit2', 
-            'MetalOxideSensor_Unit3', 
+            'MetalOxideSensor_Unit1',
+            'MetalOxideSensor_Unit2',
+            'MetalOxideSensor_Unit3',
             'MetalOxideSensor_Unit4'
         ]
-        
-        # Ensure all 4 units exist in the DataFrame before aggregating
-        if all(col in df.columns for col in mos_cols):
-            
-            # Drop the original columns to reduce dimensionality
-            df = df.drop(columns=mos_cols)
 
+        if all(col in df.columns for col in mos_cols):
+            # Scale MOS columns before PCA transform, mirroring what was done in fit().
+            # prevents fitting of raw values on scaled values that produced
+            # meaningless projection at inference time.
+            scaled_mos = self.mos_scaler.transform(df[mos_cols])
+
+            # PCA naturally aligns with the direction of maximum variance (the shared shape).
+            # Uses fit_transform during the fit() call (is_fitted=False), transform at inference.
             if self.is_fitted:
-                # Transform the underlying pattern. 
-                # PCA naturally aligns with the direction of maximum variance (the shared shape).
-                df['MetalOxideSensor_Aggregated'] = self.mos_pca.transform(df[mos_cols])[:, 0]
+                df['MetalOxideSensor_Aggregated'] = self.mos_pca.transform(scaled_mos)[:, 0]
             else:
-                df['MetalOxideSensor_Aggregated'] = self.mos_pca.fit_transform(df[mos_cols])[:, 0]
-            
-            # Drop the original columns to reduce dimensionality
+                df['MetalOxideSensor_Aggregated'] = self.mos_pca.fit_transform(scaled_mos)[:, 0]
+
+            # Drop original columns after computing the aggregated feature
+            # prevents a KeyError on df[mos_cols].
             df = df.drop(columns=mos_cols)
 
         return df
 
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Transforms features and applies final Robust Scaling for KNN."""
+        if not self.is_fitted:
+            raise RuntimeError("FeatureEngineer must be fitted before transforming.")
+
+        transformed_df = self._transform_features(df)
+
+        # Scale final output array using RobustScaler
+        scaled_array = self.final_scaler.transform(transformed_df)
+        return pd.DataFrame(scaled_array, columns=transformed_df.columns, index=transformed_df.index)
 
 class DataSaver:
     """Persists a DataFrame to a SQLite database."""
@@ -297,7 +312,14 @@ if __name__ == '__main__':
     df = DataUniformer().transform(df)
     df = DataImputer().transform(df)
     df = DataCleaner().transform(df)
-    df = FeatureEngineer().transform(df)
+
+    fe = FeatureEngineer()
+    fe.fit(df)            # ← fit first
+    df = fe.transform(df) # ← then transform
+
+    DataSaver().save(df)
+
+    print("Finished Running Data Cleaning and Feature Engineering")
 
     DataSaver().save(df)
 

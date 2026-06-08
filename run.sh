@@ -12,7 +12,9 @@ echo "Step 3: Run baseline model selection"
 python src/base_model_v2.py
 
 echo "Step 4: Run model tuning"
+python src/tuning.py
 
 echo "Step 5: Run model evaluation"
+python src/evaluation.py
 
 echo "Pipeline completed."

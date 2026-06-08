@@ -1,10 +1,16 @@
 import os
+
 import pandas as pd
 import numpy as np
+
 import sqlite3
-from sklearn.impute import KNNImputer
-from sklearn.decomposition import PCA
+
+
 from sklearn.preprocessing import RobustScaler
+from sklearn.decomposition import PCA
+
+from sklearn.impute import KNNImputer
+from sklearn.neighbors import KNeighborsClassifier
 
 import config
 
@@ -68,12 +74,26 @@ class DataImputer:
 
     def __init__(
         self,
-        light_from_time: dict[str, str] = config.IMPUTER_LIGHT_FROM_TIME,
+        light_from_time: dict[str, str] = None,
         n_neighbors: int = 5
     ):
-        self.light_from_time = light_from_time
-        # Initialize the KNN imputer here
+        self.light_from_time = light_from_time if light_from_time is not None else {}
+        self.n_neighbors = n_neighbors
         self.knn_imputer = KNNImputer(n_neighbors=n_neighbors)
+
+        # Initialize the KNN Classifier
+        self.knn_classifier = KNeighborsClassifier(n_neighbors=n_neighbors)
+
+        # Initialize Scalers for each specific pipeline task to avoid leakage
+        self.humidity_scaler = RobustScaler()
+        self.co_scaler = RobustScaler()
+
+        self.co_features = [
+            'CO2_ElectroChemicalSensor', 
+            'MetalOxideSensor_Unit1', 
+            'MetalOxideSensor_Unit3', 
+            'MetalOxideSensor_Unit4'
+        ]
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -94,30 +114,42 @@ class DataImputer:
             # Extract only the columns needed for this specific imputation
             # (KNN relies on distance, so including unrelated columns might distort results)
             impute_cols = ['temperature', 'humidity']
+
+            # RobustScaler handles NaNs automatically during fit_transform
+            scaled_humidity_data = self.humidity_scaler.fit_transform(df[impute_cols])
             
-            # Fit and transform the subset, then map it back to the dataframe
-            # Note: KNNImputer returns a numpy array, so we grab the second column [:, 1] for humidity
-            df['humidity'] = self.knn_imputer.fit_transform(df[impute_cols])[:, 1]
+            # Impute on scaled data
+            imputed_scaled = self.knn_imputer.fit_transform(scaled_humidity_data)
+            
+            # Inverse transform to bring back to original scale before saving
+            imputed_original = self.humidity_scaler.inverse_transform(imputed_scaled)
+            df['humidity'] = imputed_original[:, 1]
 
-        # CO sensor: impute with global median
-        if 'co_gassensor' in df.columns:
-            df['co_gassensor'] = df['co_gassensor'].fillna(
-                df['co_gassensor'].median()
-            )
+        # CO sensor: impute missing categorical labels using KNeighborsClassifier
+        # Using 'temperature' and 'humidity' as clean features to predict the missing CO sensor classes
+        if 'co_gassensor' in df.columns and all(col in df.columns for col in self.co_features):
+            missing_co_mask = df['co_gassensor'].isna()
 
-        # -------------------------------------------------------------
-        # Future: Impute CO via contextual (time_of_day) median
-        # -------------------------------------------------------------
-        # if 'co_gassensor' in df.columns:
-        #     df['co_gassensor'] = np.where(
-        #         df['co_gassensor'] < 0, np.nan, df['co_gassensor'])
-        #     if 'time_of_day' in df.columns:
-        #         ctx_median = df.groupby('time_of_day')['co_gassensor'] \
-        #                        .transform('median')
-        #         df['co_gassensor'] = df['co_gassensor'].fillna(ctx_median)
-        #     else:
-        #         df['co_gassensor'] = df['co_gassensor'].fillna(
-        #             df['co_gassensor'].median())
+            if missing_co_mask.any():
+                # Verify classifier was successfully trained in fit()
+                if hasattr(self.co_scaler, 'mean_'): 
+                    X_miss = df.loc[missing_co_mask, self.co_features]
+                
+                    # Fallback for missing elements in the predictor features themselves
+                    X_miss_filled = X_miss.fillna(0) 
+                    
+                    X_miss_scaled = self.co_scaler.transform(X_miss_filled)
+                
+                    # Predict the missing values
+                    predicted_co = self.knn_classifier.predict(X_miss_scaled)
+                    
+                    # Assign predictions back to the missing slots
+                    df.loc[missing_co_mask, 'co_gassensor'] = predicted_co
+                
+            # Fallback: If ALL values were missing, fill with a default mode or leave as is
+            elif missing_co_mask.all():
+                # If there's absolutely no data to train on, fallback to a placeholder
+                df['co_gassensor'] = df['co_gassensor'].fillna("Unknown")
 
         return df
 
@@ -314,8 +346,8 @@ if __name__ == '__main__':
     df = DataCleaner().transform(df)
 
     fe = FeatureEngineer()
-    fe.fit(df)            # ← fit first
-    df = fe.transform(df) # ← then transform
+    fe.fit(df)            
+    df = fe.transform(df)
 
     DataSaver().save(df)
 

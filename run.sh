@@ -9,7 +9,7 @@ echo "Step 1: Ingest raw data"
 $PYTHON_CMD src/ingest.py
 
 echo "Step 2: Clean data"
-$PYTHON_CMD src/clean_data.py
+$PYTHON_CMD src/clean_data_and_feature_engineer.py
 
 echo "Step 3: Run baseline model selection"
 $PYTHON_CMD src/base_model_v2.py

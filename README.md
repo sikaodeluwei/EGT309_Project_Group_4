@@ -134,13 +134,16 @@ The baseline model selection process is implemented in `src/base_model_v2.py`. T
 This output is then used by the tuning and evaluation stage. Instead of manually choosing the final models, the next stage can read `best_3_model_names.csv` and fine-tune only the three models selected from the baseline comparison.
 
 ## 6.2 Hyperparameter Tuning
-Top 3 Models Optimized: Random Forest, Extra Trees, and Gradient Boosting were tuned using stratified cross-validation (src/tuning.py).
+The top three models in the baseline stage, Random Forest, Extra Trees, and Gradient Boosting. There 3 modes were then optimised. The tuning framework utilises Cross-Validation to guarantee that sparse target distribution of the minority classes was mathematically preserved across every training and validation fold.
 
-Cost-Sensitive Learning: Injected class_weight='balanced' into Random Forest and Extra Trees to counteract severe class imbalance (High Activity: 929 samples vs. Moderate Activity: 176 samples). This heavily penalized minority class misclassifications.
+Class weight: To counteract the inbalance in the class (929 High Activity samples vs. only 176 Moderate Activity samples), we added in a cost-sensitive penalty structure was created. By injecting class_weight='balanced' directly into the models, the split criteria were modified to heavily penalize minority class from misclassifing during the training stage.
 
-Grid Search Settings: Fine-tuned n_estimators (up to 300 for voting stability) and max_depth (None, 10, 20 to prevent overfitting).
+Grid Search Settings: Grid search was executed to fine-tune architectural boundaries and prevent overfitting:
+. n_estimators: Evaluated up to [200, 300, 400] to ensure maximum variance stabilization and voting integrity across the tree ensembles.
 
-Champion Model: Extra Trees Classifier won, achieving a peak team score of 0.6757 Weighted $F_1$-Score (a +2.41% absolute improvement over the baseline).
+. max_depth: Constrained across a grid of [10, 20] to restrict maximum tree depth and prevent individual estimators from memorizing noise in               the environmental sensor logs.
+
+Champion Model: Following programmatic grid execution and evaluation, the Extra Trees Classifier emerged as the project’s definitive champion model. This optimized configuration secured a peak team score of 0.6757 Weighted $F_1$-Score, delivering a vital +2.41% absolute improvement over its raw baseline performance.
 
 # section 7: Explain any specific choice of metrics that are important to the problem statement
 Why Accuracy Was Rejected: Raw accuracy is misleading due to data imbalance; a model could guess "High Activity" every time and look accurate while failing completely to detect an unconscious or fallen senior.

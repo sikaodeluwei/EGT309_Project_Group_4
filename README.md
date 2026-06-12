@@ -3,7 +3,7 @@
 # Members: zhenyu, aadarsh, junhian
 
 # Section 1: Python file developers
-- zhenyu: config.py, base model.py
+- zhenyu: config.py, base model.py, docker containerization
 - aadarsh: tuning.py, evaluation.py
 - junhian: config.py, clean_data_and_feature_engineering
 
